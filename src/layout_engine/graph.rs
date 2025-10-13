@@ -65,6 +65,7 @@ pub enum LayoutKind {
     Vertical,
     HorizontalStack,
     VerticalStack,
+    Dwindle,
 }
 
 impl LayoutKind {
@@ -93,10 +94,16 @@ impl LayoutKind {
             Vertical => Orientation::Vertical,
             HorizontalStack => Orientation::Horizontal,
             VerticalStack => Orientation::Vertical,
+            // Dwindle alternates splits; choose Horizontal as the canonical
+            // "primary" orientation for callers that only need one.
+            Dwindle => Orientation::Horizontal,
         }
     }
 
     pub fn is_group(self) -> bool {
         matches!(self, LayoutKind::HorizontalStack | LayoutKind::VerticalStack)
     }
+
+    /// Returns true if this is a dwindle layout kind.
+    pub fn is_dwindle(self) -> bool { matches!(self, LayoutKind::Dwindle) }
 }

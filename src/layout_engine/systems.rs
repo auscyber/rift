@@ -66,6 +66,18 @@ pub trait LayoutSystem: Serialize + for<'de> Deserialize<'de> {
     fn apply_stacking_to_parent_of_selection(&mut self, layout: LayoutId) -> Vec<WindowId>;
     fn unstack_parent_of_selection(&mut self, layout: LayoutId) -> Vec<WindowId>;
     fn unjoin_selection(&mut self, _layout: LayoutId);
+
+    // New: perform a "dwindle" / spiral arrangement on the selected container/layout.
+    // This allows higher level code (engine) to request a dwindle transformation
+    // without needing to reach into a specific layout implementation.
+    fn dwindle_windows(&mut self, layout: LayoutId);
+
+    // New: general reset/undo method for layout transformations. This can be used
+    // to reset special container states (e.g. stacked, dwindle, etc) back to a
+    // sane default. Keep the older `unstack_parent_of_selection` for backwards
+    // compatibility; callers can use `reset_layout` to perform a broader reset.
+    fn reset_layout(&mut self, layout: LayoutId);
+
     fn resize_selection_by(&mut self, layout: LayoutId, amount: f64);
     fn rebalance(&mut self, layout: LayoutId);
 }

@@ -589,6 +589,7 @@ impl LayoutSystem for TraditionalLayoutSystem {
                 LayoutKind::Vertical => Some(LayoutKind::VerticalStack),
                 LayoutKind::HorizontalStack => Some(LayoutKind::VerticalStack),
                 LayoutKind::VerticalStack => Some(LayoutKind::HorizontalStack),
+                LayoutKind::Dwindle => None,
             };
 
             if let Some(nl) = new_layout {
@@ -1676,6 +1677,106 @@ impl Layout {
                         stack_line_horiz,
                         stack_line_vert,
                     );
+                }
+            }
+            Dwindle => {
+                // Implement a dwindle / spiral layout:
+                // Repeatedly split the remaining area and alternate between
+                // horizontal and vertical splits. Sizes are respected via the
+                // `LayoutInfo::size` proportions relative to the remaining total.
+                let children: Vec<_> = node.children(map).collect();
+                if children.is_empty() {
+                    return;
+                }
+                use objc2_core_foundation::{CGPoint, CGSize};
+                // Sum of sizes for remaining children; used to compute proportional split.
+                let mut remaining_total: f32 = children.iter().map(|c| self.info[*c].size).sum();
+                // Use a mutable working rect that we shrink each iteration.
+                let mut remaining_rect = rect;
+                // Start by splitting horizontally (this matches common dwindle orientation).
+                let mut horizontal_split = true;
+                for (i, &child) in children.iter().enumerate() {
+                    // If this is the last child, give it the entire remaining rect.
+                    if i + 1 == children.len() {
+                        let frame = remaining_rect.round();
+                        self.apply_with_gaps(
+                            map,
+                            window,
+                            child,
+                            frame,
+                            screen,
+                            sizes,
+                            stack_offset,
+                            gaps,
+                            stack_line_thickness,
+                            stack_line_horiz,
+                            stack_line_vert,
+                        );
+                        break;
+                    }
+                    let sz = self.info[child].size;
+                    let ratio = if remaining_total.abs() > f32::EPSILON {
+                        f64::from(sz as f64 / remaining_total as f64)
+                    } else {
+                        // Fallback: evenly divide remaining area
+                        1.0 / (children.len() - i) as f64
+                    };
+                    // Compute child rect depending on current split orientation.
+                    let child_rect = if horizontal_split {
+                        // split along X axis: give left portion to child
+                        let seg_w = remaining_rect.size.width * ratio as f64;
+                        CGRect {
+                            origin: CGPoint {
+                                x: remaining_rect.origin.x,
+                                y: remaining_rect.origin.y,
+                            },
+                            size: CGSize {
+                                width: seg_w,
+                                height: remaining_rect.size.height,
+                            },
+                        }
+                    } else {
+                        // split along Y axis: give top portion to child
+                        let seg_h = remaining_rect.size.height * ratio as f64;
+                        CGRect {
+                            origin: CGPoint {
+                                x: remaining_rect.origin.x,
+                                y: remaining_rect.origin.y,
+                            },
+                            size: CGSize {
+                                width: remaining_rect.size.width,
+                                height: seg_h,
+                            },
+                        }
+                    }
+                    .round();
+                    // Apply layout for this child (may recurse into containers)
+                    self.apply_with_gaps(
+                        map,
+                        window,
+                        child,
+                        child_rect,
+                        screen,
+                        sizes,
+                        stack_offset,
+                        gaps,
+                        stack_line_thickness,
+                        stack_line_horiz,
+                        stack_line_vert,
+                    );
+                    // Shrink the remaining rect by removing the area we just used.
+                    if horizontal_split {
+                        let used_w = child_rect.size.width;
+                        remaining_rect.origin.x += used_w;
+                        remaining_rect.size.width = (remaining_rect.size.width - used_w).max(0.0);
+                    } else {
+                        let used_h = child_rect.size.height;
+                        remaining_rect.origin.y += used_h;
+                        remaining_rect.size.height = (remaining_rect.size.height - used_h).max(0.0);
+                    }
+                    // Subtract the child's size and flip orientation for next split.
+                    remaining_total -= sz;
+                    horizontal_split = !horizontal_split;
                 }
             }
             Horizontal => self.layout_axis(
