@@ -297,14 +297,21 @@ impl CommandSwitcherState {
         if let Some(idx) = self.selection {
 =======
     fn ensure_selection(&mut self) {
+<<<<<<< HEAD
         if self.selection.is_some() {
             let idx = self.selection.unwrap();
 >>>>>>> 7bc2ab0 (wip)
+=======
+        if let Some(idx) = self.selection {
+>>>>>>> bb80a2c (wip)
             if idx < self.items.len() {
                 return;
             }
         }
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> bb80a2c (wip)
 
         let count = self.items.len();
         if count == 0 {
@@ -312,14 +319,20 @@ impl CommandSwitcherState {
             return;
         }
 
+<<<<<<< HEAD
 =======
 >>>>>>> 7bc2ab0 (wip)
+=======
+>>>>>>> bb80a2c (wip)
         let desired = self
             .items
             .iter()
             .enumerate()
             .find_map(|(idx, item)| item.is_primary.then_some(idx))
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> bb80a2c (wip)
             .and_then(|primary_idx| {
                 if count == 1 {
                     return Some(primary_idx);
@@ -335,9 +348,12 @@ impl CommandSwitcherState {
             })
             .or(Some(0));
 
+<<<<<<< HEAD
 =======
             .or_else(|| if self.items.is_empty() { None } else { Some(0) });
 >>>>>>> 7bc2ab0 (wip)
+=======
+>>>>>>> bb80a2c (wip)
         self.selection = desired;
     }
 
@@ -938,6 +954,7 @@ impl CommandSwitcherOverlay {
                 cache: cache.clone(),
                 generation,
 <<<<<<< HEAD
+<<<<<<< HEAD
                 refresh: refresh_ctx,
             };
             match CAPTURE_MANAGER.enqueue(job) {
@@ -949,6 +966,14 @@ impl CommandSwitcherOverlay {
             };
             let _ = CAPTURE_POOL.sender.send(job);
 >>>>>>> 7bc2ab0 (wip)
+=======
+                refresh: refresh_ctx,
+            };
+            match CAPTURE_MANAGER.enqueue(job) {
+                EnqueueResult::Enqueued | EnqueueResult::Duplicate => {}
+                EnqueueResult::ChannelClosed => break,
+            }
+>>>>>>> bb80a2c (wip)
         }
     }
 
@@ -1617,10 +1642,13 @@ fn compute_layout(count: usize, bounds: CGSize) -> LayoutResult {
             0
         };
         let offset_y = CONTAINER_PADDING + visual_row as f64 * (item_height + v_spacing);
+<<<<<<< HEAD
 =======
         let offset_x = CONTAINER_PADDING + idx as f64 * (item_width + spacing);
         let offset_y = CONTAINER_PADDING;
 >>>>>>> 7bc2ab0 (wip)
+=======
+>>>>>>> bb80a2c (wip)
 
         let item_frame = CGRect::new(
             CGPoint::new(offset_x, offset_y),
