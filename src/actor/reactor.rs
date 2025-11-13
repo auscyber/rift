@@ -248,6 +248,13 @@ pub enum Command {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum DisplaySelector {
+    Index(usize),
+    Uuid(String),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ReactorCommand {
     Debug,
@@ -265,6 +272,7 @@ pub enum ReactorCommand {
         mode: CommandSwitcherDisplayMode,
     },
     CommandSwitcherDismiss,
+    MoveMouseToDisplay(DisplaySelector),
 }
 
 #[derive(Default, Debug, Clone)]
@@ -797,6 +805,8 @@ impl Reactor {
             }
             Event::Command(Command::Reactor(ReactorCommand::CommandSwitcherDismiss)) => {
                 CommandEventHandler::handle_command_reactor_command_switcher_dismiss(self);
+            Event::Command(Command::Reactor(ReactorCommand::MoveMouseToDisplay(selector))) => {
+                CommandEventHandler::handle_command_reactor_move_mouse_to_display(self, &selector);
             }
             _ => (),
         }

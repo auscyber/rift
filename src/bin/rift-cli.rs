@@ -109,6 +109,10 @@ enum ExecuteCommands {
     CommandSwitcher {
         #[command(subcommand)]
         switcher_cmd: CommandSwitcherCommands,
+    /// Display/mouse commands
+    Display {
+        #[command(subcommand)]
+        display_cmd: DisplayCommands,
     },
     /// Save current state and exit rift
     SaveAndExit,
@@ -275,6 +279,17 @@ enum CommandSwitcherCommands {
     },
     /// Dismiss the command switcher
     Dismiss,
+enum DisplayCommands {
+    /// Move mouse cursor to a display by index (0-based)
+    MoveMouseToIndex {
+        /// Display index (0-based)
+        index: usize,
+    },
+    /// Move mouse cursor to a display by UUID
+    MoveMouseToUuid {
+        /// Display UUID
+        uuid: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -413,6 +428,8 @@ fn build_execute_request(execute: ExecuteCommands) -> Result<RiftRequest, String
         }
         ExecuteCommands::CommandSwitcher { switcher_cmd } => {
             map_command_switcher_command(switcher_cmd)?
+        ExecuteCommands::Display { display_cmd } => {
+            map_display_command(display_cmd)?
         }
         ExecuteCommands::SaveAndExit => {
             RiftCommand::Reactor(reactor::Command::Reactor(reactor::ReactorCommand::SaveAndExit))
@@ -655,6 +672,18 @@ fn parse_switcher_mode(value: &str) -> Result<CommandSwitcherDisplayMode, String
         other => Err(format!(
             "Unknown switcher mode `{}`. Expected one of: current_workspace, all_windows, workspaces",
             other
+fn map_display_command(cmd: DisplayCommands) -> Result<RiftCommand, String> {
+    use rift_wm::actor::reactor::DisplaySelector;
+    match cmd {
+        DisplayCommands::MoveMouseToIndex { index } => Ok(RiftCommand::Reactor(
+            reactor::Command::Reactor(reactor::ReactorCommand::MoveMouseToDisplay(
+                DisplaySelector::Index(index),
+            )),
+        )),
+        DisplayCommands::MoveMouseToUuid { uuid } => Ok(RiftCommand::Reactor(
+            reactor::Command::Reactor(reactor::ReactorCommand::MoveMouseToDisplay(
+                DisplaySelector::Uuid(uuid),
+            )),
         )),
     }
 }
