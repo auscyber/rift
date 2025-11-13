@@ -675,16 +675,16 @@ fn parse_switcher_mode(value: &str) -> Result<CommandSwitcherDisplayMode, String
 fn map_display_command(cmd: DisplayCommands) -> Result<RiftCommand, String> {
     use rift_wm::actor::reactor::DisplaySelector;
     match cmd {
-        DisplayCommands::MoveMouseToIndex { index } => Ok(RiftCommand::Reactor(
-            reactor::Command::Reactor(reactor::ReactorCommand::MoveMouseToDisplay(
-                DisplaySelector::Index(index),
-            )),
-        )),
-        DisplayCommands::MoveMouseToUuid { uuid } => Ok(RiftCommand::Reactor(
-            reactor::Command::Reactor(reactor::ReactorCommand::MoveMouseToDisplay(
-                DisplaySelector::Uuid(uuid),
-            )),
-        )),
+        DisplayCommands::MoveMouseToIndex { index } => {
+            Ok(RiftCommand::Reactor(reactor::Command::Reactor(
+                reactor::ReactorCommand::MoveMouseToDisplay(DisplaySelector::Index(index)),
+            )))
+        }
+        DisplayCommands::MoveMouseToUuid { uuid } => {
+            Ok(RiftCommand::Reactor(reactor::Command::Reactor(
+                reactor::ReactorCommand::MoveMouseToDisplay(DisplaySelector::Uuid(uuid)),
+            )))
+        }
     }
 }
 
