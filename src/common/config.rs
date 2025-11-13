@@ -428,7 +428,7 @@ pub enum MenuBarDisplayMode {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Copy, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ActiveWorkspaceLabel {
-    #[default] 
+    #[default]
     Index,
     Name,
 }
