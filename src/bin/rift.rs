@@ -179,8 +179,8 @@ Enable it in System Settings > Desktop & Dock (Mission Control) and restart Rift
             CGSEventType::Known(KnownCGSEvent::SpaceWindowDestroyed),
             CGSEventType::Known(KnownCGSEvent::SpaceWindowCreated),
             CGSEventType::Known(KnownCGSEvent::WindowIsChangingScreens),
-            CGSEventType::Known(KnownCGSEvent::WindowMoved),
-            CGSEventType::Known(KnownCGSEvent::WindowResized),
+            //CGSEventType::Known(KnownCGSEvent::WindowMoved),
+            //CGSEventType::Known(KnownCGSEvent::WindowResized),
         ],
         Some(window_tx_store.clone()),
     );
@@ -221,6 +221,7 @@ Enable it in System Settings > Desktop & Dock (Mission Control) and restart Rift
         event_tap_tx.clone(),
         stack_line_tx.clone(),
         mc_tx.clone(),
+        Some(window_tx_store.clone()),
         cs_tx.clone(),
     );
 

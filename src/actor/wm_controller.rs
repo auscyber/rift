@@ -26,6 +26,7 @@ type Receiver = actor::Receiver<WmEvent>;
 use crate::actor::app::AppInfo;
 use crate::actor::{self, command_switcher, event_tap, mission_control, reactor};
 use crate::common::collections::{HashMap, HashSet};
+use crate::model::tx_store::WindowTxStore;
 use crate::sys::dispatch::DispatchExt;
 use crate::sys::event::Hotkey;
 use crate::sys::geometry::CGRectExt;
@@ -126,6 +127,7 @@ pub struct WmController {
     stack_line_tx: Option<crate::actor::stack_line::Sender>,
     mission_control_tx: Option<crate::actor::mission_control::Sender>,
     command_switcher_tx: Option<command_switcher::Sender>,
+    window_tx_store: Option<WindowTxStore>,
     receiver: Receiver,
     sender: Sender,
     starting_space: Option<SpaceId>,
@@ -153,6 +155,7 @@ impl WmController {
         stack_line_tx: crate::actor::stack_line::Sender,
         mission_control_tx: crate::actor::mission_control::Sender,
         command_switcher_tx: command_switcher::Sender,
+        window_tx_store: Option<WindowTxStore>,
     ) -> (Self, actor::Sender<WmEvent>) {
         let (sender, receiver) = actor::channel();
         sys::app::set_activation_policy_callback({
@@ -170,6 +173,7 @@ impl WmController {
             stack_line_tx: Some(stack_line_tx),
             mission_control_tx: Some(mission_control_tx),
             command_switcher_tx: Some(command_switcher_tx),
+            window_tx_store,
             receiver,
             sender: sender.clone(),
             starting_space: None,
@@ -547,7 +551,12 @@ impl WmController {
 
         self.spawning_apps.insert(pid);
 
-        actor::app::spawn_app_thread(pid, info, self.events_tx.clone());
+        actor::app::spawn_app_thread(
+            pid,
+            info,
+            self.events_tx.clone(),
+            self.window_tx_store.clone(),
+        );
 
         self.spawning_apps.remove(&pid);
         self.known_apps.insert(pid);
