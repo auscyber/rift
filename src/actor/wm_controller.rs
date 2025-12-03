@@ -210,6 +210,19 @@ impl WmController {
         use self::WmCmd::*;
         use self::WmCommand::*;
         use self::WmEvent::*;
+
+        if matches!(
+            event,
+            Command(Wm(NextWorkspace))
+                | Command(Wm(PrevWorkspace))
+                | Command(Wm(SwitchToWorkspace(_)))
+                | Command(Wm(SwitchToLastWorkspace))
+                | SpaceChanged(_)
+        ) && let Some(tx) = &self.mission_control_tx
+        {
+            tx.send(mission_control::Event::RefreshCurrentWorkspace);
+        }
+
         match event {
             SystemWoke => self.events_tx.send(Event::SystemWoke),
             AppEventsRegistered => {
