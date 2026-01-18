@@ -9,7 +9,7 @@ use tracing::{instrument, warn};
 
 use crate::actor::{self, reactor};
 use crate::common::config::{CommandSwitcherDisplayMode, CommandSwitcherSettings, Config};
-use crate::model::server::{WindowData, WorkspaceData, WorkspaceQueryResponse};
+use crate::model::server::{WindowData, WorkspaceData};
 use crate::sys::dispatch::block_on;
 use crate::sys::screen;
 use crate::ui::command_switcher::{
@@ -143,12 +143,15 @@ impl CommandSwitcherActor {
                 }
             }
             CommandSwitcherDisplayMode::AllWindows => {
-                let (tx, fut) = continuation::<WorkspaceQueryResponse>();
-                let _ = self.reactor_tx.try_send(reactor::Event::QueryWorkspaces(tx));
+                let (tx, fut): (
+                    r#continue::Sender<Vec<WorkspaceData>>,
+                    r#continue::Future<Vec<WorkspaceData>>,
+                ) = continuation();
+                let _ = self
+                    .reactor_tx
+                    .try_send(reactor::Event::QueryWorkspaces { space_id: None, response: tx });
                 match block_on(fut, Duration::from_millis(750)) {
-                    Ok(resp) => {
-                        Some(CommandSwitcherMode::AllWindows(flatten_windows(resp.workspaces)))
-                    }
+                    Ok(resp) => Some(CommandSwitcherMode::AllWindows(flatten_windows(resp))),
                     Err(_) => {
                         warn!("command switcher: workspace query timed out");
                         None
@@ -156,12 +159,15 @@ impl CommandSwitcherActor {
                 }
             }
             CommandSwitcherDisplayMode::Workspaces => {
-                let (tx, fut) = continuation::<WorkspaceQueryResponse>();
-                let _ = self.reactor_tx.try_send(reactor::Event::QueryWorkspaces(tx));
+                let (tx, fut): (
+                    r#continue::Sender<Vec<WorkspaceData>>,
+                    r#continue::Future<Vec<WorkspaceData>>,
+                ) = continuation();
+                let _ = self
+                    .reactor_tx
+                    .try_send(reactor::Event::QueryWorkspaces { space_id: None, response: tx });
                 match block_on(fut, Duration::from_millis(750)) {
-                    Ok(resp) => Some(CommandSwitcherMode::Workspaces(filter_workspaces(
-                        resp.workspaces,
-                    ))),
+                    Ok(resp) => Some(CommandSwitcherMode::Workspaces(filter_workspaces(resp))),
                     Err(_) => {
                         warn!("command switcher: workspace query timed out");
                         None
