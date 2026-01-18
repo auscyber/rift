@@ -115,6 +115,10 @@ enum ExecuteCommands {
     Display {
         #[command(subcommand)]
         display_cmd: DisplayCommands,
+    /// Command switcher commands
+    CommandSwitcher {
+        #[command(subcommand)]
+        switcher_cmd: CommandSwitcherCommands,
     },
     /// Save current state and exit rift
     SaveAndExit,
@@ -325,6 +329,14 @@ enum DisplayCommands {
         #[arg(long)]
         window_id: Option<u32>,
     },
+enum CommandSwitcherCommands {
+    /// Show the command switcher using a specific mode
+    Show {
+        #[arg(value_name = "mode")]
+        switcher: String,
+    },
+    /// Dismiss the command switcher
+    Dismiss,
 }
 
 #[derive(Subcommand)]
@@ -738,6 +750,44 @@ fn map_display_command(cmd: DisplayCommands) -> Result<RiftCommand, String> {
             Ok(RiftCommand::Reactor(reactor::Command::Reactor(
                 reactor::ReactorCommand::FocusDisplay(selector),
             )))
+fn map_command_switcher_command(cmd: CommandSwitcherCommands) -> Result<RiftCommand, String> {
+    use reactor::ReactorCommand;
+    match cmd {
+        CommandSwitcherCommands::Show { switcher } => {
+            let mode = parse_switcher_mode(&switcher)?;
+            Ok(RiftCommand::Reactor(reactor::Command::Reactor(
+                ReactorCommand::ShowCommandSwitcher { mode },
+            )))
+        }
+        CommandSwitcherCommands::Dismiss => Ok(RiftCommand::Reactor(reactor::Command::Reactor(
+            ReactorCommand::CommandSwitcherDismiss,
+        ))),
+    }
+}
+
+fn parse_switcher_mode(value: &str) -> Result<CommandSwitcherDisplayMode, String> {
+    match value.to_lowercase().as_str() {
+        "current_workspace" | "current" | "workspace" | "workspaces_current" => {
+            Ok(CommandSwitcherDisplayMode::CurrentWorkspace)
+        }
+        "all_windows" | "all" | "windows" => Ok(CommandSwitcherDisplayMode::AllWindows),
+        "workspaces" | "spaces" => Ok(CommandSwitcherDisplayMode::Workspaces),
+        other => Err(format!(
+            "Unknown switcher mode `{}`. Expected one of: current_workspace, all_windows, workspaces",
+            other
+        )),
+    }
+}
+
+fn handle_success_response(request: &RiftRequest, data: serde_json::Value) -> Result<(), String> {
+    match request {
+        RiftRequest::GetWorkspaces => {
+            let typed: Vec<WorkspaceData> = serde_json::from_value(data)
+                .map_err(|e| format!("Deserialization error: {}", e))?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&typed).map_err(|e| e.to_string())?
+            );
         }
         DisplayCommands::MoveMouseToIndex { index } => {
             Ok(RiftCommand::Reactor(reactor::Command::Reactor(

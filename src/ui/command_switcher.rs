@@ -258,6 +258,7 @@ impl CommandSwitcherState {
         self.ensure_selection();
     }
 
+<<<<<<< HEAD
     fn purge(&mut self) {
         CAPTURE_MANAGER.bump_generation();
 
@@ -294,10 +295,16 @@ impl CommandSwitcherState {
 
     fn ensure_selection(&mut self) {
         if let Some(idx) = self.selection {
+=======
+    fn ensure_selection(&mut self) {
+        if self.selection.is_some() {
+            let idx = self.selection.unwrap();
+>>>>>>> 7bc2ab0 (wip)
             if idx < self.items.len() {
                 return;
             }
         }
+<<<<<<< HEAD
 
         let count = self.items.len();
         if count == 0 {
@@ -305,11 +312,14 @@ impl CommandSwitcherState {
             return;
         }
 
+=======
+>>>>>>> 7bc2ab0 (wip)
         let desired = self
             .items
             .iter()
             .enumerate()
             .find_map(|(idx, item)| item.is_primary.then_some(idx))
+<<<<<<< HEAD
             .and_then(|primary_idx| {
                 if count == 1 {
                     return Some(primary_idx);
@@ -325,6 +335,9 @@ impl CommandSwitcherState {
             })
             .or(Some(0));
 
+=======
+            .or_else(|| if self.items.is_empty() { None } else { Some(0) });
+>>>>>>> 7bc2ab0 (wip)
         self.selection = desired;
     }
 
@@ -924,12 +937,18 @@ impl CommandSwitcherOverlay {
                 task,
                 cache: cache.clone(),
                 generation,
+<<<<<<< HEAD
                 refresh: refresh_ctx,
             };
             match CAPTURE_MANAGER.enqueue(job) {
                 EnqueueResult::Enqueued | EnqueueResult::Duplicate => {}
                 EnqueueResult::ChannelClosed => break,
             }
+=======
+                overlay_ptr_bits,
+            };
+            let _ = CAPTURE_POOL.sender.send(job);
+>>>>>>> 7bc2ab0 (wip)
         }
     }
 
@@ -1403,7 +1422,13 @@ impl CommandSwitcherOverlay {
     }
 
     fn handle_click_global(&self, g_pt: CGPoint) {
+<<<<<<< HEAD
         let pt = self.global_to_local_point(g_pt);
+=======
+        let lx = g_pt.x - self.frame.origin.x;
+        let ly = g_pt.y - self.frame.origin.y;
+        let pt = CGPoint::new(lx, ly);
+>>>>>>> 7bc2ab0 (wip)
         let mut state = match self.state.try_borrow_mut() {
             Ok(s) => s,
             Err(_) => return,
@@ -1582,6 +1607,7 @@ fn compute_layout(count: usize, bounds: CGSize) -> LayoutResult {
 
     let mut item_frames = Vec::with_capacity(count);
     for idx in 0..count {
+<<<<<<< HEAD
         let row = idx / best.columns;
         let col = idx % best.columns;
         let offset_x = CONTAINER_PADDING + col as f64 * (item_width + h_spacing);
@@ -1591,6 +1617,10 @@ fn compute_layout(count: usize, bounds: CGSize) -> LayoutResult {
             0
         };
         let offset_y = CONTAINER_PADDING + visual_row as f64 * (item_height + v_spacing);
+=======
+        let offset_x = CONTAINER_PADDING + idx as f64 * (item_width + spacing);
+        let offset_y = CONTAINER_PADDING;
+>>>>>>> 7bc2ab0 (wip)
 
         let item_frame = CGRect::new(
             CGPoint::new(offset_x, offset_y),

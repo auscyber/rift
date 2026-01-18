@@ -27,6 +27,8 @@ use crate::actor::app::AppInfo;
 use crate::actor::{self, command_switcher, event_tap, mission_control, reactor};
 use crate::common::collections::{HashMap, HashSet};
 use crate::model::tx_store::WindowTxStore;
+use crate::actor::{self, command_switcher, event_tap, mission_control, reactor};
+use crate::common::collections::{HashMap, HashSet};
 use crate::sys::dispatch::DispatchExt;
 use crate::sys::event::Hotkey;
 use crate::sys::screen::{CoordinateConverter, ScreenDescriptor, SpaceId};
@@ -131,6 +133,8 @@ pub struct WmController {
     mission_control_tx: Option<mission_control::Sender>,
 >>>>>>> e74ec3e (feat: move space activation into its own manager)
     window_tx_store: Option<WindowTxStore>,
+    mission_control_tx: Option<crate::actor::mission_control::Sender>,
+    command_switcher_tx: Option<command_switcher::Sender>,
     receiver: Receiver,
     sender: Sender,
     hotkeys_installed: bool,
@@ -145,6 +149,7 @@ impl WmController {
         mission_control_tx: crate::actor::mission_control::Sender,
         command_switcher_tx: command_switcher::Sender,
         window_tx_store: Option<WindowTxStore>,
+        command_switcher_tx: command_switcher::Sender,
     ) -> (Self, actor::Sender<WmEvent>) {
         let (sender, receiver) = actor::channel();
         sys::app::set_activation_policy_callback({
@@ -163,6 +168,7 @@ impl WmController {
             mission_control_tx: Some(mission_control_tx),
             command_switcher_tx: Some(command_switcher_tx),
             window_tx_store,
+            command_switcher_tx: Some(command_switcher_tx),
             receiver,
             sender: sender.clone(),
             hotkeys_installed: false,
@@ -256,6 +262,10 @@ impl WmController {
                         "hotkeys not yet installed; deferring hotkey update until AppEventsRegistered"
                     );
                     return;
+                if let Some(tx) = &self.command_switcher_tx {
+                    let _ = tx.try_send(command_switcher::Event::UpdateConfig(
+                        self.config.config.clone(),
+                    ));
                 }
 
                 if let Some(old_ser) = old_keys_ser {

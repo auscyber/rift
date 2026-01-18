@@ -528,6 +528,26 @@ impl CommandEventHandler {
             reactor.request_close_window(wid);
         } else {
             warn!("Close window command ignored because no window is tracked");
+    pub fn handle_command_reactor_show_command_switcher(
+        reactor: &mut Reactor,
+        mode: CommandSwitcherDisplayMode,
+    ) {
+        if let Some(wm) = reactor.communication_manager.wm_sender.as_ref() {
+            let _ = wm.send(crate::actor::wm_controller::WmEvent::Command(
+                crate::actor::wm_controller::WmCommand::Wm(
+                    crate::actor::wm_controller::WmCmd::Switcher(mode),
+                ),
+            ));
+        }
+    }
+
+    pub fn handle_command_reactor_command_switcher_dismiss(reactor: &mut Reactor) {
+        if let Some(wm) = reactor.communication_manager.wm_sender.as_ref() {
+            let _ = wm.send(crate::actor::wm_controller::WmEvent::Command(
+                crate::actor::wm_controller::WmCommand::Wm(
+                    crate::actor::wm_controller::WmCmd::CommandSwitcherDismiss,
+                ),
+            ));
         }
     }
 }
