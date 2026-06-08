@@ -55,6 +55,7 @@
             inherit (inputs) crane;
             pkgs = pkgs;
           };
+          packages.default = config.packages.rift;
 
           # Per-system attributes can be defined here. The self' and inputs'
 
