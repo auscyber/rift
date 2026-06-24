@@ -2,7 +2,7 @@ use std::io::{self, Write};
 use std::path::PathBuf;
 use std::process::{self};
 
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use rift_wm::actor::app::WindowId;
 use rift_wm::actor::reactor::{self, DisplaySelector};
 use rift_wm::common::config::Config;

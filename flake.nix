@@ -46,12 +46,38 @@
         }:
         let
           craneLib = inputs.crane.mkLib pkgs;
+          cargoToml = lib.importTOML ./Cargo.toml;
+
+          rev = "dirty";
+          src = lib.cleanSourceWith {
+            src = ./.; # The original, unfiltered source
+            # TODO(DRY): Consolidate with that of default-crates.nix
+            filter =
+              path: type:
+              lib.hasSuffix ".plist" path
+              ||
+                # Default filter from crane (allow .rs files)
+                (craneLib.filterCargoSources path type);
+          };
+
+          commonArgs = {
+            inherit src;
+            pname = "rift";
+            version = "${cargoToml.package.version}-${rev}";
+            strictDeps = true;
+            cargoExtraArgs = "--workspace";
+            buildInputs = lib.optionals pkgs.stdenv.hostPlatform.isDarwin [ pkgs.libiconv ];
+            nativeCheckInputs = lib.optionals (!pkgs.stdenv.hostPlatform.isDarwin) [ pkgs.sudo ];
+          };
+          cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+
         in
         {
           overlayAttrs = {
             rift = config.packages.rift;
           };
           packages.rift = pkgs.callPackage ./package.nix {
+            inherit commonArgs cargoArtifacts;
             inherit (inputs) crane;
             pkgs = pkgs;
           };
@@ -69,6 +95,7 @@
           };
           devShells.default = craneLib.devShell {
             name = "default-dev-shell";
+            inherit cargoArtifacts;
             inputsFrom = [
               self'.packages.rift
             ];

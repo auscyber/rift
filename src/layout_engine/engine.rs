@@ -12,6 +12,7 @@ use crate::common::collections::{HashMap, HashSet};
 use crate::common::config::{LayoutMode, LayoutSettings, VirtualWorkspaceSettings};
 use crate::layout_engine::LayoutSystem;
 use crate::layout_engine::systems::WindowLayoutConstraints;
+use crate::model::WindowRegistryHandle;
 use crate::model::virtual_workspace::{
     AppRuleAssignment, AppRuleResult, VirtualWorkspace, VirtualWorkspaceId, VirtualWorkspaceManager,
 };
@@ -494,14 +495,21 @@ impl LayoutEngine {
         &mut self,
         space: SpaceId,
         workspace_id: VirtualWorkspaceId,
+        preferred_focus_window: Option<WindowId>,
     ) -> EventResponse {
-        let mut focus_window = self
-            .virtual_workspace_manager
-            .last_focused_window(space, workspace_id)
-            .filter(|wid| {
-                self.virtual_workspace_manager.workspace_for_window(space, *wid)
-                    == Some(workspace_id)
-            });
+        let mut focus_window = preferred_focus_window.filter(|wid| {
+            self.virtual_workspace_manager.workspace_for_window(space, *wid) == Some(workspace_id)
+        });
+
+        if focus_window.is_none() {
+            focus_window = self
+                .virtual_workspace_manager
+                .last_focused_window(space, workspace_id)
+                .filter(|wid| {
+                    self.virtual_workspace_manager.workspace_for_window(space, *wid)
+                        == Some(workspace_id)
+                });
+        }
 
         if focus_window.is_none() {
             if let Some(layout) = self.workspace_layouts.active(space, workspace_id) {
@@ -550,6 +558,43 @@ impl LayoutEngine {
             boundary_hit: None,
             ..Default::default()
         }
+    }
+
+    fn switch_to_workspace(
+        &mut self,
+        space: SpaceId,
+        workspace_index: usize,
+        preferred_focus_window: Option<WindowId>,
+    ) -> EventResponse {
+        let workspaces = self.virtual_workspace_manager_mut().list_workspaces(space);
+        if let Some((workspace_id, _)) = workspaces.get(workspace_index) {
+            let workspace_id = *workspace_id;
+            if self.virtual_workspace_manager.active_workspace(space) == Some(workspace_id) {
+                // Check if workspace_auto_back_and_forth is enabled
+                if self.virtual_workspace_manager.workspace_auto_back_and_forth() {
+                    // Switch to last workspace instead
+                    if let Some(last_workspace) =
+                        self.virtual_workspace_manager.last_workspace(space)
+                    {
+                        self.virtual_workspace_manager.set_active_workspace(space, last_workspace);
+                        self.update_active_floating_windows(space);
+                        self.broadcast_workspace_changed(space);
+                        self.broadcast_windows_changed(space);
+                        return self.refocus_workspace(space, last_workspace, None);
+                    }
+                }
+                return EventResponse::default();
+            }
+            self.virtual_workspace_manager.set_active_workspace(space, workspace_id);
+
+            self.update_active_floating_windows(space);
+
+            self.broadcast_workspace_changed(space);
+            self.broadcast_windows_changed(space);
+
+            return self.refocus_workspace(space, workspace_id, preferred_focus_window);
+        }
+        EventResponse::default()
     }
 
     fn filter_active_workspace_windows(
@@ -2406,7 +2451,7 @@ impl LayoutEngine {
                         self.broadcast_workspace_changed(space);
                         self.broadcast_windows_changed(space);
 
-                        let mut resp = self.refocus_workspace(space, next_workspace);
+                        let mut resp = self.refocus_workspace(space, next_workspace, None);
                         resp.hide_windows.extend(hidden_scratchpads);
                         return resp;
                     }
@@ -2429,7 +2474,7 @@ impl LayoutEngine {
                         self.broadcast_workspace_changed(space);
                         self.broadcast_windows_changed(space);
 
-                        let mut resp = self.refocus_workspace(space, prev_workspace);
+                        let mut resp = self.refocus_workspace(space, prev_workspace, None);
                         resp.hide_windows.extend(hidden_scratchpads);
                         return resp;
                     }
@@ -2437,41 +2482,16 @@ impl LayoutEngine {
                 EventResponse::default()
             }
             LayoutCommand::SwitchToWorkspace(workspace_index) => {
-                let workspaces = self.virtual_workspace_manager_mut().list_workspaces(space);
-                if let Some((workspace_id, _)) = workspaces.get(*workspace_index) {
-                    let workspace_id = *workspace_id;
-                    if self.virtual_workspace_manager.active_workspace(space) == Some(workspace_id)
-                    {
-                        // Check if workspace_auto_back_and_forth is enabled
-                        if self.virtual_workspace_manager.workspace_auto_back_and_forth() {
-                            // Switch to last workspace instead
-                            if let Some(last_workspace) =
-                                self.virtual_workspace_manager.last_workspace(space)
-                            {
-                                self.virtual_workspace_manager
-                                    .set_active_workspace(space, last_workspace);
-                                let hidden_scratchpads = self.update_active_floating_windows(space);
-                                self.broadcast_workspace_changed(space);
-                                self.broadcast_windows_changed(space);
-                                let mut resp = self.refocus_workspace(space, last_workspace);
-                                resp.hide_windows.extend(hidden_scratchpads);
-                                return resp;
-                            }
-                        }
-                        return EventResponse::default();
-                    }
-                    self.virtual_workspace_manager.set_active_workspace(space, workspace_id);
-
+ 
                     let hidden_scratchpads = self.update_active_floating_windows(space);
+ 
+                     self.broadcast_workspace_changed(space);
+                     self.broadcast_windows_changed(space);
 
-                    self.broadcast_workspace_changed(space);
-                    self.broadcast_windows_changed(space);
-
-                    let mut resp = self.refocus_workspace(space, workspace_id);
+                let mut resp = self.switch_to_workspace(space, *workspace_index, None);
+ 
                     resp.hide_windows.extend(hidden_scratchpads);
                     return resp;
-                }
-                EventResponse::default()
             }
             LayoutCommand::MoveWindowToWorkspace {
                 workspace: workspace_index,
@@ -2609,7 +2629,7 @@ impl LayoutEngine {
                     self.broadcast_workspace_changed(space);
                     self.broadcast_windows_changed(space);
 
-                    let mut resp = self.refocus_workspace(space, last_workspace);
+                    let mut resp = self.refocus_workspace(space, last_workspace, None);
                     resp.hide_windows.extend(hidden_scratchpads);
                     return resp;
                 }
@@ -2649,12 +2669,25 @@ impl LayoutEngine {
         }
     }
 
+    pub fn switch_to_workspace_with_focus(
+        &mut self,
+        space: SpaceId,
+        workspace_index: usize,
+        focus_window: WindowId,
+    ) -> EventResponse {
+        self.switch_to_workspace(space, workspace_index, Some(focus_window))
+    }
+
     pub fn virtual_workspace_manager(&self) -> &VirtualWorkspaceManager {
         &self.virtual_workspace_manager
     }
 
     pub fn virtual_workspace_manager_mut(&mut self) -> &mut VirtualWorkspaceManager {
         &mut self.virtual_workspace_manager
+    }
+
+    pub fn window_registry(&self) -> WindowRegistryHandle {
+        self.virtual_workspace_manager.window_registry()
     }
 
     pub fn active_workspace(&self, space: SpaceId) -> Option<crate::model::VirtualWorkspaceId> {
@@ -2773,6 +2806,14 @@ impl LayoutEngine {
         }
 
         if was_floating {
+            // Drop any floating position stored under the source workspace. The window has
+            // left that space, but get_workspace_floating_positions() during layout only
+            // checks is_floating() - not current assignment - so a stale source-space entry
+            // makes the source display keep re-positioning the window while the target display
+            // also positions it, producing a frame-change feedback loop (the window visibly
+            // ping-pongs between displays). Clearing it leaves the target layout pass as the
+            // sole authority, which centers the window on the destination screen.
+            self.virtual_workspace_manager.remove_floating_position(window_id);
             self.floating.add_active(target_space, window_id.pid, window_id);
             self.floating.set_last_focus(Some(window_id));
         } else if let Some(target_layout) =

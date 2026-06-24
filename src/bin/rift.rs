@@ -8,6 +8,7 @@ use objc2_application_services::AXUIElement;
 use rift_wm::actor::config::ConfigActor;
 use rift_wm::actor::config_watcher::ConfigWatcher;
 use rift_wm::actor::event_tap::EventTap;
+use rift_wm::actor::gesture_tap::GestureTap;
 use rift_wm::actor::menu_bar::Menu;
 use rift_wm::actor::mission_control::MissionControlActor;
 use rift_wm::actor::mission_control_observer::NativeMissionControl;
@@ -117,6 +118,7 @@ Enable it in System Settings > Desktop & Dock (Mission Control) and restart Rift
     let (stack_line_tx, stack_line_rx) = rift_wm::actor::channel();
     let (wnd_tx, wnd_rx) = rift_wm::actor::channel();
     let window_tx_store = WindowTxStore::new();
+    let (gesture_tap_tx, gesture_tap_rx) = rift_wm::actor::channel();
     let reactor = Reactor::spawn(
         config.clone(),
         layout,
@@ -126,6 +128,7 @@ Enable it in System Settings > Desktop & Dock (Mission Control) and restart Rift
         menu_tx.clone(),
         stack_line_tx.clone(),
         Some((wnd_tx.clone(), window_tx_store.clone())),
+        Some(gesture_tap_tx.clone()),
         opt.one,
     );
     let events_tx = reactor.sender();
@@ -188,6 +191,7 @@ Enable it in System Settings > Desktop & Dock (Mission Control) and restart Rift
         event_tap_tx.clone(),
         stack_line_tx.clone(),
         mc_tx.clone(),
+        Some(gesture_tap_tx.clone()),
         Some(window_tx_store.clone()),
     );
 
@@ -202,10 +206,11 @@ Enable it in System Settings > Desktop & Dock (Mission Control) and restart Rift
         config.clone(),
         events_tx.clone(),
         event_tap_rx,
-        Some(wm_controller_sender.clone()),
-        Some(stack_line_tx.clone()),
-        Some(stack_line_hit_rects.clone()),
+        wm_controller_sender.clone(),
+        stack_line_tx.clone(),
+        stack_line_hit_rects.clone(),
     );
+    let gesture_tap = GestureTap::new(config.clone(), wm_controller_sender.clone(), gesture_tap_rx);
     let menu = Menu::new(
         config.clone(),
         menu_rx,
@@ -238,6 +243,16 @@ Enable it in System Settings > Desktop & Dock (Mission Control) and restart Rift
     CGSetLocalEventsSuppressionInterval(0.0);
     CGEnableEventStateCombining(false);
 
+    // The event tap runs on a dedicated thread with its own CFRunLoop,
+    // isolated from main-thread stalls (layout, animation, SLS IPC).
+    std::thread::Builder::new()
+        .name("input".into())
+        .spawn(move || {
+            rift_wm::sys::executor::Executor::run(event_tap.run());
+            panic!("input thread exited");
+        })
+        .expect("failed to spawn input thread");
+
     Executor::run_main(mtm, async move {
         join!(
             supervise("wm_controller", wm_controller.run()),
@@ -245,7 +260,7 @@ Enable it in System Settings > Desktop & Dock (Mission Control) and restart Rift
                 "notification_center",
                 notification_center.watch_for_notifications()
             ),
-            supervise("event_tap", event_tap.run()),
+            supervise("gesture_tap", gesture_tap.run()),
             supervise("menu", menu.run()),
             supervise("stack_line", stack_line.run()),
             supervise("window_notify", wn_actor.run()),

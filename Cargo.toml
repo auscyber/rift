@@ -47,6 +47,7 @@ doctest = false
 
 [dependencies]
 anyhow = { version = "1.0.83", default-features = false }
+arc-swap = "1"
 ascii_tree = "0.1.1"
 thiserror = { version = "2.0.17", default-features = false }
 bitflags = "2.4.1"
@@ -82,6 +83,8 @@ objc2-app-kit = { version = "0.3.2", default-features = false, features = [
 	"NSView",
 	"NSWindow",
 	"NSWorkspace",
+	"NSTextField",
+	"NSText",
 	"libc",
 	"objc2-core-foundation",
 	"objc2-core-graphics",

@@ -1,4 +1,5 @@
 use std::ffi::c_void;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use objc2_core_foundation::{
     CFMachPort, CFRetained, CFRunLoop, CFRunLoopMode, CFRunLoopSource, kCFRunLoopCommonModes,
@@ -23,6 +24,7 @@ struct TrampolineCtx {
     original_user_info: *mut c_void,
     original_drop: Option<unsafe fn(*mut c_void)>,
     port_ptr: Option<core::ptr::NonNull<CFMachPort>>,
+    was_reenabled: AtomicBool,
 }
 
 extern "C-unwind" fn trampoline_callback(
@@ -42,6 +44,7 @@ extern "C-unwind" fn trampoline_callback(
     if ety == -1 || ety == -2 {
         if let Some(port_ptr) = ctx.port_ptr {
             unsafe { CGEvent::tap_enable(port_ptr.as_ref(), true) };
+            ctx.was_reenabled.store(true, Ordering::Release);
         }
 
         return event_ref.as_ptr();
@@ -75,7 +78,8 @@ pub struct EventTap {
 }
 
 impl EventTap {
-    pub unsafe fn new_with_options(
+    pub unsafe fn new_at_location_with_options(
+        location: CGTapLoc,
         options: CGTapOpt,
         mask: CGEventMask,
         callback: TapCallback,
@@ -87,12 +91,13 @@ impl EventTap {
             original_user_info: user_info,
             original_drop: drop_ctx,
             port_ptr: None,
+            was_reenabled: AtomicBool::new(false),
         });
         let tramp_ptr = Box::into_raw(tramp) as *mut c_void;
 
         let port = unsafe {
             CGEvent::tap_create(
-                CGTapLoc::SessionEventTap,
+                location,
                 CGTapPlace::HeadInsertEventTap,
                 options,
                 mask,
@@ -104,7 +109,7 @@ impl EventTap {
         let source = CFMachPort::new_run_loop_source(None, Some(&port), 0)?;
         if let Some(rl) = CFRunLoop::current() {
             debug!(
-                "EventTap::new_with_options: CFRunLoop::current() returned a run loop; adding source to common modes"
+                "EventTap::new_at_location_with_options: CFRunLoop::current() returned a run loop; adding source to common modes"
             );
             let mode: &CFRunLoopMode = unsafe {
                 kCFRunLoopCommonModes.expect("kCFRunLoopCommonModes should be available on macOS")
@@ -112,7 +117,7 @@ impl EventTap {
             rl.add_source(Some(&source), Some(mode));
         } else {
             debug!(
-                "EventTap::new_with_options: CFRunLoop::current() returned None; run loop not present"
+                "EventTap::new_at_location_with_options: CFRunLoop::current() returned None; run loop not present"
             );
         }
         CGEvent::tap_enable(&port, true);
@@ -132,6 +137,25 @@ impl EventTap {
         Some(event_tap)
     }
 
+    pub unsafe fn new_with_options(
+        options: CGTapOpt,
+        mask: CGEventMask,
+        callback: TapCallback,
+        user_info: *mut c_void,
+        drop_ctx: Option<unsafe fn(*mut c_void)>,
+    ) -> Option<Self> {
+        unsafe {
+            Self::new_at_location_with_options(
+                CGTapLoc::SessionEventTap,
+                options,
+                mask,
+                callback,
+                user_info,
+                drop_ctx,
+            )
+        }
+    }
+
     pub unsafe fn new_listen_only(
         mask: CGEventMask,
         callback: TapCallback,
@@ -141,7 +165,36 @@ impl EventTap {
         unsafe { Self::new_with_options(CGTapOpt::ListenOnly, mask, callback, user_info, drop_ctx) }
     }
 
+    pub unsafe fn new_at_location_listen_only(
+        location: CGTapLoc,
+        mask: CGEventMask,
+        callback: TapCallback,
+        user_info: *mut c_void,
+        drop_ctx: Option<unsafe fn(*mut c_void)>,
+    ) -> Option<Self> {
+        unsafe {
+            Self::new_at_location_with_options(
+                location,
+                CGTapOpt::ListenOnly,
+                mask,
+                callback,
+                user_info,
+                drop_ctx,
+            )
+        }
+    }
+
     pub fn set_enabled(&self, enabled: bool) { CGEvent::tap_enable(&self.port, enabled); }
+
+    /// Returns `true` if the tap was re-enabled since the last call, and
+    /// atomically clears the flag. Used by the actor layer to detect that
+    /// key-up events may have been lost while the tap was disabled.
+    pub fn take_reenabled_flag(&self) -> bool {
+        // SAFETY: self.user_info was created by new_with_options and always
+        // points to a live TrampolineCtx as long as this EventTap exists.
+        let ctx = unsafe { &*(self.user_info as *const TrampolineCtx) };
+        ctx.was_reenabled.swap(false, Ordering::AcqRel)
+    }
 }
 
 impl Drop for EventTap {
